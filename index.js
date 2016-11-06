@@ -12,10 +12,7 @@
 // 			  "topics": {
 // 				"statusGet": 	"PUT THE MQTT TOPIC FOR THE GETTING THE STATUS OF YOUR SWITCH HERE",
 // 				"statusSet": 	"PUT THE MQTT TOPIC FOR THE SETTING THE STATUS OF YOUR SWITCH HERE"
-// 			  },
-//			  "onValue": "OPTIONALLY PUT THE VALUE THAT MEANS ON HERE (DEFAULT true)",
-//			  "offValue": "OPTIONALLY PUT THE VALUE THAT MEANS OFF HERE (DEFAULT false)",
-//			  "integerValue": "OPTIONALLY SET THIS TRUE TO USE 1/0 AS VALUES",
+// 			  }
 //     }
 // ],
 //
@@ -32,9 +29,6 @@ function MqttSwitchAccessory(log, config) {
   	this.log          	= log;
   	this.name 			= config["name"];
   	this.url 			= config["url"];
-    this.publish_options = {
-      qos: ((config["qos"] !== undefined)? config["qos"]: 0)
-    };
 	this.client_Id 		= 'mqttjs_' + Math.random().toString(16).substr(2, 8);
 	this.options = {
 	    keepalive: 10,
@@ -57,21 +51,15 @@ function MqttSwitchAccessory(log, config) {
 	this.caption		= config["caption"];
 	this.topicStatusGet	= config["topics"].statusGet;
 	this.topicStatusSet	= config["topics"].statusSet;
-    this.onValue = (config["onValue"] !== undefined) ? config["onValue"]: "true";
-    this.offValue = (config["offValue"] !== undefined) ? config["offValue"]: "false";
-	if (config["integerValue"]) {
-		this.onValue = "1";
-		this.offValue = "0";
-	}
 
 	this.switchStatus = false;
-
+	
 	this.service = new Service.Switch(this.name);
   	this.service
     	.getCharacteristic(Characteristic.On)
     	.on('get', this.getStatus.bind(this))
     	.on('set', this.setStatus.bind(this));
-
+	
 	// connect to MQTT broker
 	this.client = mqtt.connect(this.url, this.options);
 	var that = this;
@@ -82,17 +70,18 @@ function MqttSwitchAccessory(log, config) {
 	this.client.on('message', function (topic, message) {
 		if (topic == that.topicStatusGet) {
 			var status = message.toString();
-			that.switchStatus = (status == that.onValue) ? true : false;
+			that.switchStatus = (status == "true" ? true : false);
 		   	that.service.getCharacteristic(Characteristic.On).setValue(that.switchStatus, undefined, 'fromSetValue');
 		}
 	});
     this.client.subscribe(this.topicStatusGet);
+    this.client.publish("Set-test", "report!");
 }
 
 module.exports = function(homebridge) {
   	Service = homebridge.hap.Service;
   	Characteristic = homebridge.hap.Characteristic;
-
+  
   	homebridge.registerAccessory("homebridge-mqttswitch", "mqttswitch", MqttSwitchAccessory);
 }
 
@@ -103,8 +92,8 @@ MqttSwitchAccessory.prototype.getStatus = function(callback) {
 MqttSwitchAccessory.prototype.setStatus = function(status, callback, context) {
 	if(context !== 'fromSetValue') {
 		this.switchStatus = status;
-	    this.client.publish(this.topicStatusSet, status ? this.onValue : this.offValue, this.publish_options);
-	}
+	    this.client.publish(this.topicStatusSet, status ? "true" : "false",{retain: true});
+	} 
 	callback();
 }
 
